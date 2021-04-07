@@ -1,9 +1,20 @@
 /* 
-  pro micro version
-  edit by wufe8
-  deleted led
-  move encoder and controller pin
-  edit because my board only have pin: 2-10, 14-16, a0-a3 (16 in tolel)
+  hajihi version for arduino leonardo
+  edit by hajihi
+  move pin:
+  key1-7 => p3-9
+  spc1-4 => p10-13
+  encoder => p1-2(first one using interrupt, so using p0/1/2/3/7 only)
+  (p0 always auto set to 1 because of TX output, idk how to turn it off, so i can't use it)
+  key1-7(led) => p18-23,14
+  p14 position(Among the three ICSP outputs in the row closer to the chip, the one farthest from the chip):
+  +---------------------------------------+
+  |Chip(32u4)                             |
+  |                                       |
+  |     RESET SCK(P15)  MISO(P14)  [ICSP] |
+  |     GND   MOSI(P16) 5V                |
+  +---------------------------------------+
+  p18-23 is equal to A0-5
 */
 
 /*
@@ -175,11 +186,13 @@ iivxReport_t report;
 // Number of microseconds between HID reports
 // 2000 = 500hz
 
-#define ENC_L_A 2
-#define ENC_L_B 21
+#define ENC_L_A 1
+#define ENC_L_B 2
 //active using ENC_L_A with interrupt, so ENC_L_A only avilable in pin 0, 1, 2, 3, 7
 //#define ENC_L_B_ADDR 3
-#define ENCODER_SENSITIVITY (double) 2.34375
+//#define ENCODER_SENSITIVITY (double) 2.34375
+#define ENCODER_SENSITIVITY (double) 8
+//The smaller the more sensitive
 #define ENCODER_PORT PIND
 //PIND is arduino register (0-7 pins) RO, set each bit from each pin, eg:01001110 (pin 1,2,3,6 = HIGH). using bit move right and bit AND to get single bit if necessary
 // encoder sensitivity = number of positions per rotation (600) / number of positions for HID report (256)
@@ -195,8 +208,8 @@ uint8_t lightMode = 0;
 // 0 = reactive lighting, 1 = HID lighting
 //uint8_t ledPins[] = {2,3,4,5,6,7,8,9,10};
 //uint8_t buttonPins[] = {11,12,13,18,19,20,21,22,23};
-uint8_t ledPins[] = {0,18,0,19,0,20,0,0,0,0,0}; //key 1357(iidx map)
-uint8_t buttonPins[] = {3,4,5,6,7,8,9,10,16,14,15};
+uint8_t ledPins[] = {18,19,20,21,22,23,14,0,0,0,0};
+uint8_t buttonPins[] = {3,4,5,6,7,8,9,10,11,12,13};
 //uint8_t sysPin = 11;
 uint8_t reactiveLightPin = 21;
 uint8_t hidLightPin = 22;
