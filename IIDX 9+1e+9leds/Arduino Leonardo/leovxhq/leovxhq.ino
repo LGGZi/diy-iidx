@@ -271,7 +271,12 @@ void loop() {
     if(digitalRead(buttonPins[i])!=HIGH){
       report.buttons |= (uint16_t)1 << i;
     } else {
-      report.buttons &= ~((uint16_t)1 << i);
+      delay(2);
+      if(digitalRead(buttonPins[i])!=HIGH){
+        report.buttons |= (uint16_t)1 << i;
+      } else {
+        report.buttons &= ~((uint16_t)1 << i);
+      }
     }
   }
   // Read Encoders
