@@ -15,6 +15,13 @@
   |     GND   MOSI(P16) 5V                |
   +---------------------------------------+
   p18-23 is equal to A0-5
+
+  hold key combination below can change output mode temporary when pluging device:
+  [default] spc1+key1 => mode 0: turntable output relative x-axis signal
+  spc1+key2 => mode 1: turntable output absolute x-axis and button signal without threshold time
+  spc1+key3 => mode 2: turntable output absolute x-axis and button signal, with low threshold time
+  spc1+key4 => mode 3: turntable output absolute x-axis and button signal, with high threshold time
+  mode state won't storage in EEPROM
 */
 
 /*
@@ -210,6 +217,8 @@ uint8_t lightMode = 0;
 //uint8_t buttonPins[] = {11,12,13,18,19,20,21,22,23};
 uint8_t ledPins[] = {18,19,20,21,22,23,14,0,0,0,0};
 uint8_t buttonPins[] = {3,4,5,6,7,8,9,10,11,12,13};
+uint8_t muiltCount = 4;
+uint8_t muiltPins[][2] = {{10,3}, {10,4}, {10,5}, {10,6}};
 //uint8_t sysPin = 11;
 uint8_t reactiveLightPin = 21;
 uint8_t hidLightPin = 22;
@@ -229,7 +238,9 @@ int32_t encL=0;
  *    system button + button 1 = reactive lighting
  *    system button + button 3 = HID lighting
  */
- 
+
+uint8_t stopFlag = 0;
+uint8_t stopThreshold = 0;
 
 void doEncL(){
   //if((ENCODER_PORT >> ENC_L_B_ADDR)&1){
@@ -241,6 +252,31 @@ void doEncL(){
   }
 }
 
+void doEncLAbsoluteOn(){
+  stopFlag = 0;
+  if (digitalRead(ENC_L_B) != HIGH) {
+    encL = 255;
+    report.buttons &= ~((uint16_t)1 << (buttonCount + 1));
+    report.buttons |= (uint16_t)1 << buttonCount;
+  } else {
+    encL = -256;
+    report.buttons &= ~((uint16_t)1 << buttonCount);
+    report.buttons |= (uint16_t)1 << (buttonCount + 1);
+  }
+}
+
+void doEncLAbsoluteOff(){
+  if(stopFlag < stopThreshold){
+      stopFlag++;
+    } else {
+      encL = 0;
+      report.buttons &= ~((uint16_t)1 << buttonCount);
+      report.buttons &= ~((uint16_t)1 << (buttonCount + 1));
+      //report.buttons |= (uint16_t)1 << buttonCount;
+      //report.buttons |= (uint16_t)1 << (buttonCount + 1);
+    }
+}
+
 void lights(uint16_t lightDesc){
   for(int i=0;i<buttonCount;i++){
      if((lightDesc>>i)&1){
@@ -248,6 +284,20 @@ void lights(uint16_t lightDesc){
      } else {
          digitalWrite(ledPins[i],LOW);
      }
+  }
+}
+
+void lightsTest(uint16_t number = 7){
+  number = number > buttonCount ? buttonCount : number;
+  for(int i = 0; i < 3; i++){
+    for(int j = 0; j < number; j++){
+        digitalWrite(ledPins[j],HIGH);
+    }
+    delay(100);
+    for(int j = 0; j < number; j++){
+        digitalWrite(ledPins[j],LOW);
+    }
+    delay(100);
   }
 }
 
@@ -262,7 +312,35 @@ void setup() {
   //setup interrupts
   pinMode(ENC_L_A,INPUT_PULLUP);
   pinMode(ENC_L_B,INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(ENC_L_A), doEncL, RISING);
+  //attachInterrupt(digitalPinToInterrupt(ENC_L_A), doEncL, RISING); //default
+
+  if(digitalRead(muiltPins[0][0]) != HIGH && digitalRead(muiltPins[0][1]) != HIGH) // mode 0: turntable output relative x-axis signal
+  {
+    lightsTest(1);
+    attachInterrupt(digitalPinToInterrupt(ENC_L_A), doEncL, RISING);
+  }
+  else if(digitalRead(muiltPins[1][0]) != HIGH && digitalRead(muiltPins[1][1]) != HIGH) // mode 1: turntable output absolute x-axis and button signal without threshold time
+  {
+    lightsTest(2);
+    stopThreshold = 1; //loop threshold that how keep turntable output x-axis signal, defult is 0 which won't reset x-axis value
+    attachInterrupt(digitalPinToInterrupt(ENC_L_A), doEncLAbsoluteOn, RISING);
+  }
+  else if(digitalRead(muiltPins[2][0]) != HIGH && digitalRead(muiltPins[2][1]) != HIGH) // mode 2: turntable output absolute x-axis and button signal with low threshold time
+  {
+    lightsTest(3);
+    stopThreshold = 4; //loop threshold that how keep turntable output x-axis signal, defult is 0 which won't reset x-axis value
+    attachInterrupt(digitalPinToInterrupt(ENC_L_A), doEncLAbsoluteOn, RISING);
+  }
+  else if(digitalRead(muiltPins[3][0]) != HIGH && digitalRead(muiltPins[3][1]) != HIGH) // mode 3: turntable output absolute x-axis and button signal with high threshold time
+  {
+    lightsTest(4);
+    stopThreshold = 8; //loop threshold that how keep turntable output x-axis signal, defult is 0 which won't reset x-axis value
+    attachInterrupt(digitalPinToInterrupt(ENC_L_A), doEncLAbsoluteOn, RISING);
+  }
+  else // defalut: equal to mode 0
+  {
+    attachInterrupt(digitalPinToInterrupt(ENC_L_A), doEncL, RISING); // default
+  }
 }
 
 void loop() {
@@ -271,7 +349,7 @@ void loop() {
     if(digitalRead(buttonPins[i])!=HIGH){
       report.buttons |= (uint16_t)1 << i;
     } else {
-      delay(2);
+      delay(1);
       if(digitalRead(buttonPins[i])!=HIGH){
         report.buttons |= (uint16_t)1 << i;
       } else {
@@ -279,10 +357,13 @@ void loop() {
       }
     }
   }
+  if(stopThreshold != 0){
+    doEncLAbsoluteOff();
+  }
   // Read Encoders
   report.xAxis = (uint8_t)((int32_t)(encL / ENCODER_SENSITIVITY) % 256);
   // Light LEDs
-  if(lightMode==0){
+  if(lightMode == 0){
     lights(report.buttons);
   } else {
     lights(iivx_led);
